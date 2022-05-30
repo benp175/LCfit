@@ -1,11 +1,12 @@
 #
-#	2bodylcfit.py
+#	twobodylcfit.py
 #
 #	Built specifically to fit Haumea and Hiiaka's light curves by fitting sinusoidal shapes
 #	to them.
 #
 #	Benjamin Proudfoot
-#	03/07/21
+#	Seneca Heilesen
+#	5/30/2022
 #
 
 
@@ -24,11 +25,11 @@ from astroquery.jplhorizons import Horizons
 def likelihood(params, obsdf, synth = False):
 	# unpack params
 	a00, a01, phi00, phi01, a10, a11, a12, phi10, phi11, phi12, offset0 = params
-	p0 = 3.915341
-	p0 = p0/24
-	p1 = 9.79736
-	p1 = p1/24
-	t0 = 2459281
+	p0 = 3.915341 #Haumea rotational period
+	p0 = p0/24 #Convert to days
+	p1 = 9.79736 #Hi'iaka rotational period
+	p1 = p1/24 #Convert to days
+	t0 = 2459281 #JD for first BYU observation
 
 	times = obsdf["JD_UTC"].values.flatten()
 	
@@ -37,7 +38,11 @@ def likelihood(params, obsdf, synth = False):
 	flux_hiiaka = a10*np.sin(2*np.pi*(phi10 + 2*(times-t0)/p1)) + a11*np.sin(2*np.pi*(phi11 + (times-t0)/p1)) + a12*np.sin(2*np.pi*(phi12 + 3*(times-t0)/p1))
 	flux_total = flux_haumea + flux_hiiaka + offset0
 
-	residuals = (obsdf["Source-Sky_T1"] - flux_total)/(obsdf["Source_Error_T1"])
+	#Auto-normalize the data
+	source_norm = (obsdf["Source-Sky_T1"] - np.mean(obsdf["Source Sky_T1"]))/np.std(obsdf["Source-Sky_T1"])
+	err_norm = (obsdf["Source_Error_T1"]-np.mean(obsdf["Source_Error_T1"]))/np.std(obsdf["Source-Sky_T1"])
+    
+	residuals = (source_norm - flux_haumea)/(err_norm)
 
 	if synth:
 		return flux_total, residuals, flux_haumea, flux_hiiaka
@@ -50,17 +55,16 @@ def likelihood(params, obsdf, synth = False):
 def priors(params):
 	# apply flat priors to the data...
 	a00, a01, phi00, phi01, a10, a11, a12, phi10, phi11, phi12, offset0 = params
-	p1 = 9.8
-	#if p0 <= 0 or p1 <= 0:
-	#	return -np.inf
+	p0 = 3.915341/24 #=0.163
+	p1 = 9.79736/24 #=0.408
 	if a00 <= 0 or a01 <= 0 or a10 <= 0 or a11 <= 0 or a12 <= 0:
 		return -np.inf
 	elif phi00 <= 0 or phi01 <= 0 or phi10 <= 0 or phi11 <= 0 or phi12 <= 0:
 		return -np.inf
 	elif phi00 >= 1 or phi01 >= 1 or phi10 >= 1 or phi11 >= 1 or phi12 >= 1:
 		return -np.inf
-	elif offset0 <= 0:
-		return -np.inf
+	#elif offset0 <= 0:
+		#return -np.inf
 	elif a00 <= a01:
 		return -np.inf
 #	elif a10 <= a11 or a10 <= a12:
@@ -85,37 +89,39 @@ nwalkers = 500
 nburnin = 1000
 nsample = 1000
 
-obsdf = pd.read_csv("r_band.csv")
+obsdf = pd.read_csv("Measurements.csv")
 nobs = obsdf["JD_UTC"].values.size
 
-times = obsdf["JD_UTC"].values.flatten()
+times = obsdf["JD_UTC"].values.flatten() #unit=days
 
 ourKBO = Horizons(id="Haumea",location=705,epochs = times)
 
-lighttime = ourKBO.vectors()['lighttime']
+# Correct for light-time variations
+lighttime = ourKBO.vectors()['lighttime'] #unit=minutes
+lighttime = lighttime*1440 #convert to fraction of a day
 correctedtime = times-lighttime
 
 obsdf["JD_UTC"] = correctedtime
 
 # draw initial guess
 #p0_0 = np.random.normal(loc = 3.915341, scale = 0.0001, size = nwalkers)
-a00_0 = np.random.normal(loc = 0.09659, scale = 0.001, size = nwalkers)
-a01_0 = np.random.normal(loc = 0.026, scale = 0.001, size = nwalkers)
+a00_0 = np.random.normal(loc = 1.384, scale = 0.01, size = nwalkers)
+a01_0 = np.random.normal(loc = 0.427, scale = 0.01, size = nwalkers)
 phi00_0 = np.random.uniform(size = nwalkers)
 phi01_0 = np.random.uniform(size = nwalkers)
 
 p1 = np.random.normal(loc = 9.8, scale = 0.0, size = nwalkers)
-a10_0 = np.random.normal(loc = 0.0275, scale = 0.001, size = nwalkers)
-a11_0 = np.random.normal(loc = 0.0275, scale = 0.001, size = nwalkers)
-a12_0 = np.random.normal(loc = 0.01, scale = 0.005, size = nwalkers)
+a10_0 = np.random.normal(loc = 0.0275, scale = 0.01, size = nwalkers)
+a11_0 = np.random.normal(loc = 0.0275, scale = 0.01, size = nwalkers)
+a12_0 = np.random.normal(loc = 0.01, scale = 0.01, size = nwalkers)
 phi10_0 = np.random.uniform(size = nwalkers)
 phi11_0 = np.random.uniform(size = nwalkers)
 phi12_0 = np.random.uniform(size = nwalkers)
-offset0 = np.random.normal(loc = 0.2, scale = 0.1, size = nwalkers)
+offset0 = np.random.normal(loc = 0, scale = 0.1, size = nwalkers)
 
 names = ["a00", "a01", "phi00", "phi01", "a10", "a11", "a12", "phi10", "phi11", "phi12", "offset0"]
 p0 = np.array([a00_0, a01_0, phi00_0, phi01_0, a10_0, a11_0, a12_0, phi10_0, phi11_0, phi12_0, offset0]).T
-print(p0.shape)
+#print(p0.shape)
 ndim = len(p0[0])
 
 # Go through initial guesses and check that all walkers have finite posterior probability
@@ -187,21 +193,25 @@ print(params)
 model, residuals, flux0, flux1 = likelihood(params, obsdf, synth = True)
 
 plt.figure()
-plt.plot(obsdf["JD_UTC"].values.flatten(), obsdf["Source-Sky_T1"].values.flatten(), marker = "D", label = "Observed")
+source_norm = (obsdf["Source-Sky_T1"] - np.mean(obsdf["Source-Sky_T1"]))/np.std(obsdf["Source-Sky_T1"])
+err_norm = (obsdf["Source_Error_T1"]-np.mean(obsdf["Source_Error_T1"]))/np.std(obsdf["Source-Sky_T1"])
+plt.errorbar(obsdf["JD_UTC"].values.flatten(), source_norm.values.flatten(), err_norm.values.flatten(), marker = "D", label = "Observed")
 plt.plot(obsdf["JD_UTC"].values.flatten(), model, marker = "o", label = "Model")
 plt.legend()
 plt.xlabel("Time")
 plt.ylabel("Flux (arb. units)")
-plt.xlim(2459280.8,2459281.1)
-plt.savefig("best_model.png")
+#plt.xlim(2459280.8,2459281.1)
+plt.savefig("best_model.jpg", bbox_inches='tight')
+plt.show()
 plt.close()
 
 plt.figure()
 plt.plot(obsdf["JD_UTC"].values.flatten(), residuals, marker = "o")
 plt.xlabel("Time")
 plt.ylabel("Residual flux (arb. units)")
-plt.xlim(2459280.8,2459281.1)
-plt.savefig("best_residuals.png")
+#plt.xlim(2459280.8,2459281.1)
+plt.savefig("best_residuals.jpg", bbox_inches='tight')
+plt.show()
 plt.close()
 
 plt.figure()
@@ -210,7 +220,7 @@ plt.plot(obsdf["JD_UTC"].values.flatten(), flux1, marker = "o", label = "Hiiaka"
 plt.xlabel("Time")
 plt.ylabel("Flux variation (arb. units)")
 #plt.xlim(2459280.8,2459281.1)
-plt.savefig("variations.png")
+plt.savefig("variations.jpg", bbox_inches='tight')
 plt.show()
 plt.close()
 

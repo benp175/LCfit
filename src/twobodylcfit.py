@@ -39,7 +39,7 @@ def likelihood(params, obsdf, synth = False):
 	flux_total = flux_haumea + flux_hiiaka + offset0
 
 	#Auto-normalize the data
-	source_norm = (obsdf["Source-Sky_T1"] - np.mean(obsdf["Source Sky_T1"]))/np.std(obsdf["Source-Sky_T1"])
+	source_norm = (obsdf["Source-Sky_T1"] - np.mean(obsdf["Source-Sky_T1"]))/np.std(obsdf["Source-Sky_T1"])
 	err_norm = (obsdf["Source_Error_T1"]-np.mean(obsdf["Source_Error_T1"]))/np.std(obsdf["Source-Sky_T1"])
     
 	residuals = (source_norm - flux_haumea)/(err_norm)

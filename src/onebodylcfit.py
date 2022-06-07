@@ -6,7 +6,7 @@
 #
 #	Benjamin Proudfoot
 #	Seneca Heilesen
-#	5/26/2022
+#	5/27/2022
 #
 
 
@@ -40,7 +40,7 @@ def likelihood(params, obsdf, synth = False):
 	
 	#Auto-normalize the data
 	source_norm = (obsdf["Source-Sky_T1"] - np.mean(obsdf["Source-Sky_T1"]))/np.std(obsdf["Source-Sky_T1"])
-	err_norm = (obsdf["Source_Error_T1"]-np.mean(obsdf["Source_Error_T1"]))/np.std(obsdf["Source-Sky_T1"])
+	err_norm = obsdf["Source_Error_T1"]/np.std(obsdf["Source-Sky_T1"])
 
 	residuals = (source_norm - flux_haumea)/(err_norm)
 	#residuals = (mag_obs - mag_haumea)/(mag_err)
@@ -145,8 +145,6 @@ for i in tqdm(range(nwalkers)):
 			sys.exit() 
     
 # start emcee burn in
-# start emcee sample
-# make plots
 
 #print(obsdf)
 
@@ -172,7 +170,8 @@ model, residuals = likelihood(params, obsdf, synth = True)
 #make plots
 plt.figure()
 source_norm = (obsdf["Source-Sky_T1"] - np.mean(obsdf["Source-Sky_T1"]))/np.std(obsdf["Source-Sky_T1"])
-plt.plot(obsdf["JD_UTC"].values.flatten(), source_norm.values.flatten(), marker = "D", label = "Observed")
+err_norm = obsdf["Source_Error_T1"]/np.std(obsdf["Source-Sky_T1"])
+plt.errorbar(obsdf["JD_UTC"].values.flatten(), source_norm.values.flatten(), err_norm.values.flatten(), marker = "D", label = "Observed")
 #plt.plot(obsdf["JD_UTC"].values.flatten(), -2.5*np.log10(obsdf["Source-Sky_T1"]), marker = "D")
 plt.plot(obsdf["JD_UTC"].values.flatten(), model, marker = "o")
 plt.legend()

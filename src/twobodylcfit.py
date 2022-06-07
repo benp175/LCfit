@@ -6,7 +6,7 @@
 #
 #	Benjamin Proudfoot
 #	Seneca Heilesen
-#	5/30/2022
+#	6/1/2022
 #
 
 
@@ -35,13 +35,13 @@ def likelihood(params, obsdf, synth = False):
 	
 	residuals = np.zeros(times.size)
 	flux_haumea = a00*np.sin(2*np.pi*(phi00 + 2*(times-t0)/p0)) + a01*np.sin(2*np.pi*(phi01 + (times-t0)/p0))
-	flux_hiiaka = a10*np.sin(2*np.pi*(phi10 + 2*(times-t0)/p1)) + a11*np.sin(2*np.pi*(phi11 + (times-t0)/p1)) + a12*np.sin(2*np.pi*(phi12 + 3*(times-t0)/p1))
+	flux_hiiaka = a10*np.sin(2*np.pi*(phi10 + 2*(times-t0)/p1)) + a11*np.sin(2*np.pi*(phi11 + (times-t0)/p1))
 	flux_total = flux_haumea + flux_hiiaka + offset0
 
 	#Auto-normalize the data
 	source_norm = (obsdf["Source-Sky_T1"] - np.mean(obsdf["Source-Sky_T1"]))/np.std(obsdf["Source-Sky_T1"])
-	err_norm = (obsdf["Source_Error_T1"]-np.mean(obsdf["Source_Error_T1"]))/np.std(obsdf["Source-Sky_T1"])
-    
+	err_norm = obsdf["Source_Error_T1"]/np.std(obsdf["Source-Sky_T1"])
+	
 	residuals = (source_norm - flux_haumea)/(err_norm)
 
 	if synth:
@@ -57,19 +57,39 @@ def priors(params):
 	a00, a01, phi00, phi01, a10, a11, a12, phi10, phi11, phi12, offset0 = params
 	p0 = 3.915341/24 #=0.163
 	p1 = 9.79736/24 #=0.408
-	if a00 <= 0 or a01 <= 0 or a10 <= 0 or a11 <= 0 or a12 <= 0:
+	if a00 <= 0 or a01 <= 0 or a10 <= 0 or a11 <= 0:
 		return -np.inf
-	elif phi00 <= 0 or phi01 <= 0 or phi10 <= 0 or phi11 <= 0 or phi12 <= 0:
+	elif phi00 <= 0:
+		phi00=0.9
 		return -np.inf
-	elif phi00 >= 1 or phi01 >= 1 or phi10 >= 1 or phi11 >= 1 or phi12 >= 1:
+	elif phi01 <= 0:
+		phi01 = 0.9
+		return -np.inf
+	elif phi10 <= 0:
+		phi10=0.9
+		return -np.inf
+	elif phi11 <= 0:
+		phi11 = 0.9
+		return -np.inf
+	elif phi00 >= 1:
+		phi00 = 0.1
+		return -np.inf
+	elif phi01 >= 1:
+		phi01 = 0.1
+		return -np.inf
+	elif phi10 >= 1:
+		phi10 = 0.1
+		return -np.inf
+	elif phi11 >= 1:
+		phi11 = 0.1
 		return -np.inf
 	#elif offset0 <= 0:
 		#return -np.inf
 	elif a00 <= a01:
 		return -np.inf
-#	elif a10 <= a11 or a10 <= a12:
-#		return -np.inf
-	elif 0.5*a00 <= a10:
+	elif a10 <= a11:
+		return -np.inf
+	elif 0.25*a00 <= a10:
 		return -np.inf
 	else:
 		return 0
@@ -86,8 +106,8 @@ def probability(params, obsdf):
 # Starting actual code
 
 nwalkers = 500
-nburnin = 1000
-nsample = 1000
+nburnin = 10000
+nsample = 30000
 
 obsdf = pd.read_csv("Measurements.csv")
 nobs = obsdf["JD_UTC"].values.size
@@ -194,7 +214,7 @@ model, residuals, flux0, flux1 = likelihood(params, obsdf, synth = True)
 
 plt.figure()
 source_norm = (obsdf["Source-Sky_T1"] - np.mean(obsdf["Source-Sky_T1"]))/np.std(obsdf["Source-Sky_T1"])
-err_norm = (obsdf["Source_Error_T1"]-np.mean(obsdf["Source_Error_T1"]))/np.std(obsdf["Source-Sky_T1"])
+err_norm = obsdf["Source_Error_T1"]/np.std(obsdf["Source-Sky_T1"])
 plt.errorbar(obsdf["JD_UTC"].values.flatten(), source_norm.values.flatten(), err_norm.values.flatten(), marker = "D", label = "Observed")
 plt.plot(obsdf["JD_UTC"].values.flatten(), model, marker = "o", label = "Model")
 plt.legend()
